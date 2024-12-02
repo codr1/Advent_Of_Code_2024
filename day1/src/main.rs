@@ -54,10 +54,27 @@ fn main() -> std::io::Result<()> {
     list2.sort_unstable();
 
     for i in 0..list1.len() {
-        sum += (list1[i] - list2[i]).abs()
+        sum += (list1[i] - list2[i]).abs();
         println!("{} {} {} {}", list1[i], list2[i], list2[i]-list1[i], sum );
     }
-
     println!("Sum:{}", sum);
+
+
+    // Process unique numbers in list1 and multiply by occurrences in list2
+    sum = 0;
+    let mut prev = None;
+    for &num in list1.iter() {
+        if prev != Some(num) {
+            // Count occurrences in list2
+            let occurrences = list2.iter().filter(|&&x| x == num).count() as i32;
+            println!("Number {} appears {} times in list2, result: {}", num, occurrences, num * occurrences);
+            sum += num * occurrences;
+            prev = Some(num);
+
+        }
+    }
+    println!("Sum: {}", sum);
+
+
     Ok(())
 }
