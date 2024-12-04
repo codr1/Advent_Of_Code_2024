@@ -1,0 +1,113 @@
+use std::fs::File;
+use std::io::{self, BufRead, BufReader};
+
+fn read_to_array(filename: &str) -> io::Result<Vec<Vec<char>>> {
+    let file = File::open(filename)?;
+    let reader = BufReader::new(file);
+    
+    let mut array_2d: Vec<Vec<char>> = Vec::new();
+    
+    for line in reader.lines() {
+        let line = line?;
+        // Convert each line into a vector of characters
+        let row: Vec<char> = line.chars().collect();
+        array_2d.push(row);
+    }
+    
+    Ok(array_2d)
+}
+
+fn check_direction(grid: &[Vec<char>], row: i32, col: i32, dx: i32, dy: i32) -> Option<&'static str> {
+    let target_mas = ['M', 'A', 'S'];
+    let target_sam = ['S', 'A', 'M'];
+    let rows = grid.len() as i32;
+    let cols = grid[0].len() as i32;
+    
+    // Check if we can fit 3 letters in this direction
+    let mut mas_match = true;
+    let mut sam_match = true;
+    
+    for i in 0..3 {
+        let new_row = row + dy * i;
+        let new_col = col + dx * i;
+        
+        if new_row < 0 || new_row >= rows || new_col < 0 || new_col >= cols {
+            return None;
+        }
+        
+        let current_char = grid[new_row as usize][new_col as usize];
+        if current_char != target_mas[i as usize] {
+            mas_match = false;
+        }
+        if current_char != target_sam[i as usize] {
+            sam_match = false;
+        }
+        
+        if !mas_match && !sam_match {
+            return None;
+        }
+    }
+    
+    if mas_match {
+        Some("MAS")
+    } else if sam_match {
+        Some("SAM")
+    } else {
+        None
+    }
+}
+
+fn find_diagonal_pairs(grid: &[Vec<char>]) -> Vec<(usize, usize, &'static str, &'static str)> {
+    let mut findings = Vec::new();
+    let rows = grid.len();
+    let cols = grid[0].len();
+    
+    // Only diagonal directions
+    let diagonal_pairs = [
+        // (down-right, up-left)
+        ((1, 1), (-1, -1)),
+        // (down-left, up-right)
+        ((-1, 1), (1, -1))
+    ];
+
+    for row in 0..rows {
+        for col in 0..cols {
+            for &(dir1, dir2) in &diagonal_pairs {
+                let (dx1, dy1) = dir1;
+                let (dx2, dy2) = dir2;
+                
+                // Check both diagonals
+                if let Some(pattern1) = check_direction(grid, row as i32, col as i32, dx1, dy1) {
+                    if let Some(pattern2) = check_direction(grid, row as i32, col as i32, dx2, dy2) {
+                        findings.push((row, col, pattern1, pattern2));
+                    }
+                }
+            }
+        }
+    }
+    
+    findings
+}
+
+fn main() -> io::Result<()> {
+    let filename = "data";
+    match read_to_array(filename) {
+        Ok(grid) => {
+            // Find all occurrences of "XMAS"
+            let findings = find_diagonal_pairs(&grid);
+            
+            if findings.is_empty() {
+                println!("No 'XMAS' patterns found!");
+            } else {
+                println!("Found 'XMAS' at the following positions:");
+                for (row, col, pattern1, pattern2) in &findings {
+                    println!("Position ({}, {}): diagonal pair {} and {}", row, col, pattern1, pattern2);
+                }
+            }
+            println!("Number found: {}", findings.len());
+        }
+        Err(e) => eprintln!("Error reading file: {}", e),
+    }
+    
+    Ok(())
+}
