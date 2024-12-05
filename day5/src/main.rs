@@ -75,6 +75,38 @@ fn check_page_numbers(numbers: &Vec<i32>, rules: &Vec<Vec<i32>>) -> (bool, usize
     (true, 0, 0, 0)
 }
 
+fn fix_order(page_list: &Vec<i32>, rules: &Vec<Vec<i32>>) -> Vec<i32> {
+    let mut fixed_list = page_list.clone();
+    
+    
+    'outer: loop {
+        // Create a vector of indices and values
+        let numbers: Vec<(usize, i32)> = fixed_list.iter().enumerate().map(|(i, &n)| (i, n)).collect();
+        
+        for i in 0..numbers.len() {
+            for j in (i + 1)..numbers.len() {
+                let curr_page = numbers[i].1;
+                let checked_page = numbers[j].1;
+                
+                // Check against each rule
+                for rule in rules.iter() {
+                    if rule[0] == checked_page && rule[1] == curr_page {
+                        // Swap the numbers
+                        fixed_list.swap(numbers[i].0, numbers[j].0);
+                        continue 'outer;
+                    }
+                }
+                
+            }
+        }
+        
+        // If we get here, no violations were found
+        break;
+    }
+    
+    fixed_list
+}
+
 fn main() {
     println!("Hello, world!");
 
@@ -83,11 +115,16 @@ fn main() {
     let rules = parse_rules(rules_lines);
     let pages = parse_pages(pages_lines);
     let mut sum = 0;
+    let mut fix_sum = 0;
 
     for (idx, page_list) in pages.iter().enumerate() {
-        let(pass, rule_index, curr_page, checked_page) = check_page_numbers(&page_list, &rules);
+        let (pass, rule_index, curr_page, checked_page) = check_page_numbers(&page_list, &rules);
         if !pass {
-            println!("failed line {}, failed rule {} - {}, {}", idx + 1, rule_index + 1, curr_page, checked_page );
+            println!("failed line {}, failed rule {} - {}, {}", idx + 1, rule_index + 1, curr_page, checked_page);
+            let fixed_list = fix_order(&page_list, &rules);
+            println!("Fixed line: {:?}", fixed_list);
+            let middle_index = fixed_list.len() / 2;
+            fix_sum += fixed_list[middle_index];
         } else {
             let middle_index = page_list.len() / 2;
             println!("mid {}", page_list[middle_index]);
@@ -95,6 +132,6 @@ fn main() {
         }
             
     }
-    println!("Sum {}", sum);
+    println!("Sum {} Fix Sum {}", sum, fix_sum);
 
 }
