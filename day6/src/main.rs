@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 #[derive(Debug)]
 enum Direction {
@@ -67,34 +67,72 @@ fn get_next_position(current: (i32, i32), direction: &Direction) -> (i32, i32) {
     }
 }
 
-fn walk_grid(grid: &[Vec<char>], start: (usize, usize)) -> usize {
-    let mut visited = HashSet::new();
+#[derive(Debug)]
+enum WalkResult {
+    ExitGrid,
+    Loop,
+}
+
+fn walk_grid_detect_loop(grid: &[Vec<char>], start: (usize, usize)) -> WalkResult {
+    let mut visit_count: HashMap<(i32, i32), usize> = HashMap::new();
     let mut current = (start.0 as i32, start.1 as i32);
     let mut direction = Direction::North;
     
-    // Add starting position to visited set
-    visited.insert(current);
+    visit_count.insert(current, 1);
     
     loop {
         let next = get_next_position(current, &direction);
         
-        // Check if next position is outside grid
         if !is_valid_move(grid, next.0, next.1) {
-            break;
+            return WalkResult::ExitGrid;
         }
         
-        // Check if we hit a wall (#)
         if grid[next.0 as usize][next.1 as usize] == '#' {
             direction = direction.next();
             continue;
         }
         
-        // Move to next position
         current = next;
-        visited.insert(current);
+        
+        let count = visit_count.entry(current).or_insert(0);
+        *count += 1;
+        
+        if *count > 3 {
+            return WalkResult::Loop;
+        }
+    }
+}
+
+fn find_loops(grid: &mut Vec<Vec<char>>, start: (usize, usize)) -> usize {
+    let mut loop_count = 0;
+    let height = grid.len();
+    let width = grid[0].len();
+    
+    for row in 0..height {
+        for col in 0..width {
+            // Skip if not a dot or if it's the starting position
+            if grid[row][col] != '.' || (row == start.0 && col == start.1) {
+                continue;
+            }
+            
+            // Try placing a wall here
+            grid[row][col] = '#';
+            
+            // Check if this creates a loop
+            match walk_grid_detect_loop(grid, start) {
+                WalkResult::Loop => {
+                    loop_count += 1;
+                    println!("Found loop with wall at ({}, {})", row, col);
+                }
+                WalkResult::ExitGrid => {}
+            }
+            
+            // Restore the dot
+            grid[row][col] = '.';
+        }
     }
     
-    visited.len()
+    loop_count
 }
 
 fn main() {
@@ -111,8 +149,9 @@ fn main() {
             
             if let Some((row, col)) = find_cursor(&grid) {
                 println!("\nFound cursor (^) at position: row {}, column {}", row + 1, col + 1);
-            let visited_count = walk_grid(&grid, (row, col));
-            println!("Number of coordinates visited: {}", visited_count);
+            let mut grid_copy = grid.clone();
+            let loop_count = find_loops(&mut grid_copy, (row, col));
+            println!("Number of possible loops found: {}", loop_count);
             } else {
                 println!("\nNo cursor (^) found in the grid!");
             }
