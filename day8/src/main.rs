@@ -117,22 +117,37 @@ fn find_symbol_pairs(grid: &Grid, filter_symbols: &Option<&HashSet<char>>) -> io
                 let dx = p2.x - p1.x;
                 let dy = p2.y - p1.y;
 
-                // Calculate antinode points
-                let ext1 = Point {
-                    x: p1.x - dx,
-                    y: p1.y - dy,
-                };
-                let ext2 = Point {
-                    x: p2.x + dx,
-                    y: p2.y + dy,
-                };
+                // The antenna positions themselves are antinodes
+                unique_extended_points.insert(p1);
+                unique_extended_points.insert(p2);
 
-                // Store valid extended points
-                if grid.is_in_bounds(ext1) {
-                    unique_extended_points.insert(ext1);
+                // Generate all points along the line in both directions
+                let mut multiplier = 1;
+                // Forward direction
+                loop {
+                    let point = Point {
+                        x: p2.x + dx * multiplier,
+                        y: p2.y + dy * multiplier,
+                    };
+                    if !grid.is_in_bounds(point) {
+                        break;
+                    }
+                    unique_extended_points.insert(point);
+                    multiplier += 1;
                 }
-                if grid.is_in_bounds(ext2) {
-                    unique_extended_points.insert(ext2);
+
+                // Backward direction
+                multiplier = 1;
+                loop {
+                    let point = Point {
+                        x: p1.x - dx * multiplier,
+                        y: p1.y - dy * multiplier,
+                    };
+                    if !grid.is_in_bounds(point) {
+                        break;
+                    }
+                    unique_extended_points.insert(point);
+                    multiplier += 1;
                 }
             }
         }
