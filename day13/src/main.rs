@@ -1,24 +1,18 @@
-use nalgebra::{Matrix2, Vector2};
 use std::fs::read_to_string;
 
-#[derive(Debug)]
-struct Button {
-    x: i128,
-    y: i128,
-}
+const GRID_X = 11;
+const GRID_Y = 7;
+// const GRID_X = 101;
+// const GRID_Y = 103;
 
 #[derive(Debug)]
-struct Prize {
-    x: i128,
-    y: i128,
+struct Robot {
+    x: i32,
+    y: i32,
+    x_v: i32,
+    y_v: i32
 }
 
-#[derive(Debug)]
-struct Machine {
-    button_a: Button,
-    button_b: Button,
-    prize: Prize,
-}
 
 fn parse_line(line: &str) -> Option<(i128, i128)> {
     let parts: Vec<&str> = line.split(":").collect();
@@ -47,30 +41,11 @@ fn parse_line(line: &str) -> Option<(i128, i128)> {
 }
 
 fn parse_machines(content: &str) -> Vec<Machine> {
-    let mut machines = Vec::new();
+    let mut robots = Vec::new();
     let mut lines = content.lines();
 
-    while let (Some(button_a), Some(button_b), Some(prize)) =
-        (lines.next(), lines.next(), lines.next())
+    while let Some(robot) = lines.next()
     {
-        if let (Some((ax, ay)), Some((bx, by)), Some((px, py))) = (
-            parse_line(button_a),
-            parse_line(button_b),
-            parse_line(prize),
-        ) {
-            const OFFSET: i128 = 10000000000000;
-            machines.push(Machine {
-                button_a: Button { x: ax, y: ay },
-                button_b: Button { x: bx, y: by },
-                prize: Prize {
-                    x: px + OFFSET,
-                    y: py + OFFSET,
-                },
-            });
-        }
-
-        // Skip empty line if it exists
-        lines.next();
     }
 
     machines
@@ -116,7 +91,7 @@ fn solve_machine(machine: &Machine) -> Option<(i128, i128)> {
 
 fn main() {
     let content = read_to_string("data").expect("Could not read file");
-    let machines = parse_machines(&content);
+    let robots = parse_robots(&content);
 
     let mut total_tokens: i128 = 0;
 
