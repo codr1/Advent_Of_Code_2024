@@ -5,7 +5,7 @@ use std::fs::read_to_string;
 const GRID_X: i32 = 101;
 const GRID_Y: i32 = 103;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 struct Robot {
     x: i32,
     y: i32,
@@ -113,6 +113,22 @@ fn find_symmetry(robots: &Vec<Robot>) -> bool {
     true
 }
 
+fn check_unique(robots: &Vec<Robot>) -> bool {
+    // Create grid to track positions
+    let mut grid = vec![vec![0; GRID_Y as usize]; GRID_X as usize];
+
+    // Count robots in each position
+    for robot in robots {
+        grid[robot.x as usize][robot.y as usize] += 1;
+        // If we find any position with more than one robot, return false
+        if grid[robot.x as usize][robot.y as usize] > 1 {
+            return false;
+        }
+    }
+
+    true
+}
+
 fn calc_risk(robots: &Vec<Robot>) -> i32 {
     let mid_x = GRID_X / 2;
     let mid_y = GRID_Y / 2;
@@ -140,17 +156,55 @@ fn calc_risk(robots: &Vec<Robot>) -> i32 {
 }
 
 fn main() {
-    let num_steps = 100;
+    let mut num_steps: u64 = 100;
     let content = read_to_string("data2").expect("Could not read file");
     let mut robots = parse_robots(&content);
+    let mut robots2 = robots.clone();
+    let mut big_risk: i32 = i32::MAX;
 
     for _ in 0..num_steps {
         move_robots(&mut robots);
-        draw_map(&robots);
+        //draw_map(&robots);
     }
 
     let risk = calc_risk(&robots);
     println!("Risk factor: {}", risk);
 
-    // let mut map = vec![vec![Vec::new(); GRID_Y as usize]; GRID_X as usize];
+    num_steps = 0;
+    loop {
+        num_steps += 1;
+        move_robots(&mut robots2);
+
+        /* didn't work
+        if find_symmetry(&robots2) {
+            break;
+        }
+        */
+
+        /* Worked
+        let risk = calc_risk(&robots2);
+        if big_risk > risk {
+            big_risk = risk;
+            draw_map(&robots2);
+            println!("Risk: {}", big_risk);
+            println!("Steps: {}", num_steps);
+        }
+        */
+
+        // Worked
+        if check_unique(&robots2) {
+            println!("All robots in unique positions at step {}", num_steps);
+            draw_map(&robots2);
+            let risk = calc_risk(&robots2);
+            println!("Steps: {}", num_steps);
+            println!("Risk: {}", risk);
+            break;
+        }
+
+        if num_steps % 1000000 == 0 {
+            println!("Steps: {}", num_steps);
+        }
+    }
+    draw_map(&robots2);
+    println!("Steps: {}", num_steps);
 }
