@@ -168,8 +168,80 @@ fn get_neighbors(
     neighbors
 }
 
-fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<(i32, i32)>)> {
+fn find_all_paths(map: &Map, start: Item, end: Item, target_cost: i32) -> Vec<Vec<(i32, i32)>> {
+    use std::collections::{HashMap, VecDeque};
+
+    #[derive(Clone)]
+    struct PathState {
+        cost: i32,
+        position: (i32, i32),
+        direction: Direction,
+        path: Vec<(i32, i32)>,
+    }
+
+    let mut paths = Vec::new();
+    let mut queue = VecDeque::new();
+    let mut visited = HashMap::new();
+
+    // Start facing East
+    let initial_state = PathState {
+        cost: 0,
+        position: (start.x, start.y),
+        direction: Direction::East,
+        path: vec![(start.x, start.y)],
+    };
+    queue.push_back(initial_state);
+
+    while let Some(state) = queue.pop_front() {
+        // Prune if cost exceeds target
+        if state.cost > target_cost {
+            continue;
+        }
+
+        // Found a valid path
+        if state.position == (end.x, end.y) && state.cost == target_cost {
+            paths.push(state.path);
+            continue;
+        }
+
+        let is_first_move = state.position == (start.x, start.y);
+        for (next_pos, next_dir) in
+            get_neighbors(state.position, state.direction, is_first_move, map)
+        {
+            let move_cost = if state.direction == next_dir { 1 } else { 1001 };
+            let next_cost = state.cost + move_cost;
+
+            // Skip if exceeds target cost
+            if next_cost > target_cost {
+                continue;
+            }
+
+            // Create new path state
+            let mut next_path = state.path.clone();
+            next_path.push(next_pos);
+
+            // Visit state if it's better or equal cost
+            let state_key = (next_pos, next_dir);
+            if !visited.contains_key(&state_key) || visited[&state_key] >= next_cost {
+                visited.insert(state_key, next_cost);
+                queue.push_back(PathState {
+                    cost: next_cost,
+                    position: next_pos,
+                    direction: next_dir,
+                    path: next_path,
+                });
+            }
+        }
+    }
+    paths
+}
+
+fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<Vec<(i32, i32)>>)> {
     use std::collections::{BinaryHeap, HashMap};
+
+    // First find shortest path cost using Dijkstra's
+    let mut min_cost = i32::MAX;
+    let mut best_paths: Vec<Vec<(i32, i32)>> = Vec::new();
 
     let mut heap = BinaryHeap::new();
     let mut costs = HashMap::new();
@@ -224,14 +296,14 @@ fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<(i32, i32)>)
             // Reconstruct path
             let mut path = Vec::new();
             let mut current_state = (position, direction);
-            path.push(current_state.0); // Only store the position in the path
+            path.push(current_state.0);
 
             println!("Reconstructing path:");
             println!("  End: {:?} facing {:?}", current_state.0, current_state.1);
 
             while let Some(&prev_state) = came_from.get(&current_state) {
                 println!("  Previous: {:?} facing {:?}", prev_state.0, prev_state.1);
-                path.push(prev_state.0); // Only store the position in the path
+                path.push(prev_state.0);
                 current_state = prev_state;
 
                 if current_state.0 == (start.x, start.y) {
@@ -241,8 +313,28 @@ fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<(i32, i32)>)
             }
 
             path.reverse();
-            println!("Final path with {} steps: {:?}", path.len(), path);
-            return Some((cost, path));
+            println!(
+                "Found path with {} steps and cost {}: {:?}",
+                path.len(),
+                cost,
+                path
+            );
+
+            // Update best paths collection
+            if cost < min_cost {
+                // Found a better cost, clear all previous paths
+                min_cost = cost;
+                best_paths.clear();
+                best_paths.push(path);
+                println!("New minimum cost found: {}! Cleared previous paths.", cost);
+            } else if cost == min_cost {
+                // Found another path with the same minimum cost
+                best_paths.push(path);
+                println!("Found another path with minimum cost {}!", cost);
+            }
+
+            // Continue searching for other possible paths
+            continue;
         }
 
         let is_first_move = position == (start.x, start.y);
@@ -273,7 +365,15 @@ fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<(i32, i32)>)
         }
     }
 
-    None
+    if !best_paths.is_empty() {
+        // Now that we have the minimum cost, do BFS to find all paths with that cost
+        println!("\nDoing BFS to find all paths with cost {}", min_cost);
+        let all_paths = find_all_paths(map, start, end, min_cost);
+        println!("BFS found {} paths", all_paths.len());
+        Some((min_cost, all_paths))
+    } else {
+        None
+    }
 }
 
 fn main() {
@@ -287,9 +387,66 @@ fn main() {
     );
     println!("Map dimensions: {}x{}", map.len(), map[0].len());
     match find_path(&map, robot, end) {
-        Some((cost, path)) => {
+        Some((cost, paths)) => {
+            println!("\nFINAL RESULTS:");
             println!("Shortest path cost: {}", cost);
-            println!("Path: {:?}", path);
+            println!("Number of different shortest paths: {}", paths.len());
+
+            // Print individual paths
+            for (i, path) in paths.iter().enumerate() {
+                println!("Path {}: {:?}", i + 1, path);
+            }
+
+            // Find unique tiles across all paths
+            use std::collections::HashSet;
+            let mut unique_tiles = HashSet::new();
+
+            // Add all tiles from all paths
+            for path in paths.iter() {
+                unique_tiles.extend(path.iter().cloned());
+            }
+
+            println!("\nPath Analysis:");
+            println!("Total optimal paths found: {}", paths.len());
+            println!(
+                "Number of unique tiles used across all paths: {}",
+                unique_tiles.len()
+            );
+            println!("Unique tiles: {:?}", unique_tiles);
+
+            // Print map with paths
+            println!("\nMap with all shortest paths:");
+
+            // Create a set of all path positions
+            let mut path_positions: HashSet<(i32, i32)> = HashSet::new();
+            for path in paths.iter() {
+                path_positions.extend(path.iter().cloned());
+            }
+
+            // ANSI color codes
+            const BLUE: &str = "\x1b[34m";
+            const WHITE: &str = "\x1b[97m";
+            const RESET: &str = "\x1b[0m";
+
+            // Print the map
+            for y in 0..map.len() {
+                for x in 0..map[0].len() {
+                    let pos = (x as i32, y as i32);
+                    match map[y][x].thing {
+                        Thing::Wall => print!("{BLUE}#{RESET}"),
+                        Thing::Robot => print!("S"),
+                        Thing::End => print!("E"),
+                        Thing::Empty => {
+                            if path_positions.contains(&pos) {
+                                print!("{WHITE}█{RESET}");
+                            } else {
+                                print!(".");
+                            }
+                        }
+                    };
+                }
+                println!(); // New line after each row
+            }
         }
         None => {
             println!("No path found!");
