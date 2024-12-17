@@ -1,4 +1,67 @@
+use crossterm::{
+    cursor,
+    style::{Color, ResetColor, SetForegroundColor},
+    terminal::{Clear, ClearType},
+    ExecutableCommand, QueueableCommand,
+};
 use std::fs::read_to_string;
+use std::io::{stdout, Write};
+
+fn draw_map(
+    map: &Map,
+    confirmed_paths: &[Vec<(i32, i32)>],
+    current_path: &[(i32, i32)],
+    stats: &str,
+) {
+    let mut stdout = stdout();
+
+    // Move cursor to top-left and clear screen
+    stdout.execute(cursor::MoveTo(0, 0)).unwrap();
+    stdout.execute(Clear(ClearType::All)).unwrap();
+
+    // Create a set of confirmed path positions
+    let mut confirmed_positions: std::collections::HashSet<(i32, i32)> =
+        std::collections::HashSet::new();
+    for path in confirmed_paths {
+        confirmed_positions.extend(path.iter().cloned());
+    }
+
+    // Print stats first
+    println!("{}\n", stats);
+
+    // Print the map
+    for y in 0..map.len() {
+        for x in 0..map[0].len() {
+            let pos = (x as i32, y as i32);
+            match map[y][x].thing {
+                Thing::Wall => {
+                    stdout.queue(SetForegroundColor(Color::Blue)).unwrap();
+                    print!("#");
+                }
+                Thing::Robot => print!("S"),
+                Thing::End => print!("E"),
+                Thing::Empty => {
+                    if current_path.contains(&pos) {
+                        stdout.queue(SetForegroundColor(Color::Yellow)).unwrap();
+                        print!("█");
+                    } else if confirmed_positions.contains(&pos) {
+                        stdout.queue(SetForegroundColor(Color::White)).unwrap();
+                        print!("█");
+                    } else {
+                        stdout.queue(ResetColor).unwrap();
+                        print!(".");
+                    }
+                }
+            }
+            stdout.queue(ResetColor).unwrap();
+        }
+        println!();
+    }
+    stdout.flush().unwrap();
+
+    // Small delay to make the visualization visible
+    std::thread::sleep(std::time::Duration::from_millis(20));
+}
 
 #[derive(Debug, Copy, Clone)]
 enum Thing {
@@ -137,10 +200,6 @@ fn get_neighbors(
     is_first_move: bool,
     map: &Map,
 ) -> Vec<((i32, i32), Direction)> {
-    println!(
-        "Getting neighbors for position {:?}, current_dir: {:?}",
-        pos, current_dir
-    );
     let mut neighbors = Vec::new();
 
     let valid_turns = get_valid_turns(current_dir, is_first_move);
@@ -169,6 +228,10 @@ fn get_neighbors(
 }
 
 fn find_all_paths(map: &Map, start: Item, end: Item, target_cost: i32) -> Vec<Vec<(i32, i32)>> {
+    // Clear screen and hide cursor at start
+    let mut stdout = stdout();
+    stdout.execute(Clear(ClearType::All)).unwrap();
+    stdout.execute(cursor::Hide).unwrap();
     use std::collections::{HashMap, VecDeque};
 
     #[derive(Clone)]
@@ -192,7 +255,21 @@ fn find_all_paths(map: &Map, start: Item, end: Item, target_cost: i32) -> Vec<Ve
     };
     queue.push_back(initial_state);
 
+    let mut counter = 0;
     while let Some(state) = queue.pop_front() {
+        counter += 1;
+        if counter % 1000 == 0 {
+            // Only draw every 10th attempt
+            let stats = format!(
+                "Searching paths... Found: {}\nCurrent cost: {}/{}\nPaths found so far: {}\nAttempts: {}",
+                paths.len(),
+                state.cost,
+                target_cost,
+                paths.len(),
+                counter
+            );
+            draw_map(map, &paths, &state.path, &stats);
+        }
         // Prune if cost exceeds target
         if state.cost > target_cost {
             continue;
@@ -233,6 +310,8 @@ fn find_all_paths(map: &Map, start: Item, end: Item, target_cost: i32) -> Vec<Ve
             }
         }
     }
+    // Show cursor again before returning
+    stdout.execute(cursor::Show).unwrap();
     paths
 }
 
@@ -266,14 +345,6 @@ fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<Vec<(i32, i3
     }) = heap.pop()
     {
         iteration += 1;
-        println!(
-            "Iteration {}: At {:?} facing {:?} cost={} queue_size={}",
-            iteration,
-            position,
-            direction,
-            cost,
-            heap.len()
-        );
 
         // Add safety limit
         if iteration > 1000000 {
@@ -287,10 +358,6 @@ fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<Vec<(i32, i3
             }
         }
 
-        println!(
-            "  Checking if at end: current={:?}, end=({},{})",
-            position, end.x, end.y
-        );
         if position == (end.x, end.y) {
             println!("Found end position with cost {}!", cost);
             // Reconstruct path
@@ -298,16 +365,11 @@ fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<Vec<(i32, i3
             let mut current_state = (position, direction);
             path.push(current_state.0);
 
-            println!("Reconstructing path:");
-            println!("  End: {:?} facing {:?}", current_state.0, current_state.1);
-
             while let Some(&prev_state) = came_from.get(&current_state) {
-                println!("  Previous: {:?} facing {:?}", prev_state.0, prev_state.1);
                 path.push(prev_state.0);
                 current_state = prev_state;
 
                 if current_state.0 == (start.x, start.y) {
-                    println!("  Reached start!");
                     break;
                 }
             }
@@ -344,14 +406,6 @@ fn find_path(map: &Map, start: Item, end: Item) -> Option<(i32, Vec<Vec<(i32, i3
 
             let current_best = costs.get(&(next_pos, next_dir));
             let is_better = current_best.map_or(true, |&c| next_cost < c);
-
-            println!("  Considering move to {:?} facing {:?}", next_pos, next_dir);
-            println!(
-                "    New cost would be: {} (turn cost: {})",
-                next_cost, move_cost
-            );
-            println!("    Current best cost: {:?}", current_best);
-            println!("    Better? {}", is_better);
 
             if is_better {
                 costs.insert((next_pos, next_dir), next_cost);
