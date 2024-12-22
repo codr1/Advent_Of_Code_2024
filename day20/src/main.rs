@@ -105,44 +105,51 @@ fn analyze_jumps(
     reference_cost: i32,
 ) -> Vec<JumpResult> {
     let mut shortcuts = Vec::new();
+    const MAX_JUMP: i32 = 20;
 
-    for y in 0..map.len() {
-        for x in 0..map[0].len() {
-            if matches!(map[y][x].thing, Thing::Empty) {
-                let current_pos = (x as i32, y as i32);
+    for start_y in 0..map.len() {
+        for start_x in 0..map[0].len() {
+            if matches!(map[start_y][start_x].thing, Thing::Empty | Thing::Start) {
+                let start_jump = (start_x as i32, start_y as i32);
 
                 // Skip if we can't reach this position from start
-                if !start_distances.contains_key(&current_pos) {
+                if !start_distances.contains_key(&start_jump) {
                     continue;
                 }
 
-                // Check 2 spaces in each direction
-                let directions = [(0, -2), (0, 2), (2, 0), (-2, 0)]; // up, down, right, left
-                for (dx, dy) in directions.iter() {
-                    let jump_x = x as i32 + dx;
-                    let jump_y = y as i32 + dy;
-                    let jump_pos = (jump_x, jump_y);
+                // Check all positions within Manhattan distance of MAX_JUMP
+                for end_y in 0..map.len() {
+                    for end_x in 0..map[0].len() {
+                        let end_jump = (end_x as i32, end_y as i32);
 
-                    // Check if jump position is valid and reachable
-                    if jump_y >= 0
-                        && (jump_y as usize) < map.len()
-                        && jump_x >= 0
-                        && (jump_x as usize) < map[0].len()
-                        && !matches!(map[jump_y as usize][jump_x as usize].thing, Thing::Wall)
-                        && end_distances.contains_key(&jump_pos)
-                    {
+                        // Calculate Manhattan distance
+                        let manhattan_dist =
+                            (end_jump.0 - start_jump.0).abs() + (end_jump.1 - start_jump.1).abs();
+
+                        // Skip if jump is too long or to the same position
+                        if manhattan_dist == 0 || manhattan_dist > MAX_JUMP {
+                            continue;
+                        }
+
+                        // Skip walls and unreachable positions
+                        if matches!(map[end_y][end_x].thing, Thing::Wall)
+                            || !end_distances.contains_key(&end_jump)
+                        {
+                            continue;
+                        }
+
                         // Calculate total path length with jump
-                        let path_length = start_distances[&current_pos] // Start to current
-                            + 2  // Cost of jump
-                            + end_distances[&jump_pos]; // Jump point to end
+                        let path_length = start_distances[&start_jump] // Start to jump point
+                            + manhattan_dist  // Cost of jump
+                            + end_distances[&end_jump]; // Jump endpoint to end
 
                         if path_length < reference_cost {
                             shortcuts.push(JumpResult {
-                                from: current_pos,
-                                to: jump_pos,
+                                from: start_jump,
+                                to: end_jump,
                                 total_length: path_length,
-                                start_to_jump: start_distances[&current_pos],
-                                jump_to_end: end_distances[&jump_pos],
+                                start_to_jump: start_distances[&start_jump],
+                                jump_to_end: end_distances[&end_jump],
                             });
                         }
                     }
@@ -202,14 +209,18 @@ fn main() {
         .filter_map(
             |shortcut| match reference_cost - shortcut.total_length >= 100 {
                 true => {
+                    /*
                     println!("\nFound shorter path:");
                     println!("  Jump from {:?} to {:?}", shortcut.from, shortcut.to);
                     println!("  New path length: {}", shortcut.total_length);
                     println!("  Saves {} steps", reference_cost - shortcut.total_length);
                     println!("  Path segments:");
                     println!("    Start to jump point: {} steps", shortcut.start_to_jump);
-                    println!("    Jump cost: 2 steps");
+                    let manhattan_dist = (shortcut.to.0 - shortcut.from.0).abs()
+                        + (shortcut.to.1 - shortcut.from.1).abs();
+                    println!("    Jump cost: {} steps", manhattan_dist);
                     println!("    After jump to end: {} steps", shortcut.jump_to_end);
+                    */
                     Some(())
                 }
                 false => None,
